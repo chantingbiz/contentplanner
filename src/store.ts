@@ -995,6 +995,8 @@ state.importState = function(snapshot: Partial<AppData>) {
     ideas: migrated.ideas,
     posts: migrated.posts,
     currentWorkspaceId: migrated.currentWorkspaceId,
+    done: migrated.done,
+    gridsByWorkspace: migrated.gridsByWorkspace,
   };
   
   emitChange();
