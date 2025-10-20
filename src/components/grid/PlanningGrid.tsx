@@ -73,24 +73,26 @@ export default function PlanningGrid() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 justify-items-center">
-        {cells.map((cell) => {
-          const idea = cell.ideaId ? ideas.find(i => i.id === cell.ideaId) : undefined;
-          const label = getIdeaLabel(cell.ideaId);
-          const filled = !!idea;
-          
-          return (
-            <GridCellView
-              key={cell.id}
-              cell={cell}
-              idea={idea}
-              label={label}
-              filled={filled}
-              onOpen={() => filled && setModalIdeaId(cell.ideaId!)}
-              onClear={() => gridClear(cell.id)}
-            />
-          );
-        })}
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full">
+          {cells.map((cell) => {
+            const idea = cell.ideaId ? ideas.find(i => i.id === cell.ideaId) : undefined;
+            const label = getIdeaLabel(cell.ideaId);
+            const filled = !!idea;
+            
+            return (
+              <GridCellView
+                key={cell.id}
+                cell={cell}
+                idea={idea}
+                label={label}
+                filled={filled}
+                onOpen={() => filled && setModalIdeaId(cell.ideaId!)}
+                onClear={() => gridClear(cell.id)}
+              />
+            );
+          })}
+        </div>
       </div>
 
       {modalIdea && (
@@ -120,12 +122,18 @@ function GridCellView({ cell, idea, label, filled, onOpen, onClear }: GridCellVi
     disabled: !filled,
   });
 
-  const tileClasses = "aspect-[9/16] w-40 sm:w-44 md:w-48 lg:w-52";
+  const tileClasses = [
+    "aspect-[9/16]",
+    "w-full",
+    "min-w-[84px]",
+    "rounded-xl overflow-hidden",
+    "bg-[#0c1116] border border-white/10"
+  ].join(" ");
 
   return (
     <div
       ref={setDropRef}
-      className={`relative ${tileClasses} rounded-2xl border border-gray-700/60 bg-gray-900/60 overflow-hidden transition-all ${
+      className={`relative ${tileClasses} transition-all ${
         isOver ? 'ring-2 ring-brand/50' : ''
       } ${isDragging ? 'opacity-40' : ''}`}
     >

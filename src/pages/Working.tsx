@@ -276,7 +276,7 @@ export default function Working() {
         <DragOverlay>
           {activeId ? (
             <div 
-              className="aspect-[9/16] w-40 sm:w-44 md:w-48 lg:w-52 rounded-xl overflow-hidden border-2 border-brand bg-gray-900/90 shadow-2xl flex items-center justify-center"
+              className="aspect-[9/16] w-full min-w-[84px] max-w-[160px] rounded-xl overflow-hidden border-2 border-brand bg-gray-900/90 shadow-2xl flex items-center justify-center"
             >
               <div className="text-xs text-gray-400">Dragging...</div>
             </div>
