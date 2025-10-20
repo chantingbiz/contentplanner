@@ -50,28 +50,30 @@ export default function PlanningGrid() {
   return (
     <section className="mb-6">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base font-semibold">Planning Grid ({grid.rows}×3)</h2>
+        <h2 className="text-sm sm:text-base font-semibold">Planning Grid ({grid.rows}×3)</h2>
         <div className="flex items-center gap-2">
           <button
-            className="text-xs px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
+            className="text-xs px-2 sm:px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
             onClick={() => addGridRows(1)}
           >
-            Add Row (+3)
+            <span className="hidden sm:inline">Add Row (+3)</span>
+            <span className="sm:hidden">+Row</span>
           </button>
           <button
-            className="text-xs px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
+            className="text-xs px-2 sm:px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition-colors"
             onClick={() => {
               if (confirm('Reset grid to 1×3 and clear all cells?')) {
                 gridResetTo1x3();
               }
             }}
           >
-            Reset 1×3
+            <span className="hidden sm:inline">Reset 1×3</span>
+            <span className="sm:hidden">Reset</span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 justify-items-center">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 justify-items-center">
         {cells.map((cell) => {
           const idea = cell.ideaId ? ideas.find(i => i.id === cell.ideaId) : undefined;
           const label = getIdeaLabel(cell.ideaId);
@@ -118,20 +120,22 @@ function GridCellView({ cell, idea, label, filled, onOpen, onClear }: GridCellVi
     disabled: !filled,
   });
 
+  const tileClasses = "aspect-[9/16] w-40 sm:w-44 md:w-48 lg:w-52";
+
   return (
     <div
       ref={setDropRef}
-      className={`relative w-32 sm:w-36 md:w-40 lg:w-44 rounded-2xl border border-gray-700/60 bg-gray-900/60 overflow-hidden transition-all ${
+      className={`relative ${tileClasses} rounded-2xl border border-gray-700/60 bg-gray-900/60 overflow-hidden transition-all ${
         isOver ? 'ring-2 ring-brand/50' : ''
       } ${isDragging ? 'opacity-40' : ''}`}
     >
       <div
         ref={filled ? setDragRef : undefined}
         {...(filled ? { ...attributes, ...listeners } : {})}
-        className={`aspect-[9/16] w-full ${
+        className={`w-full h-full ${
           filled ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
         }`}
-        style={filled ? { touchAction: 'none' } : undefined}
+        style={{ touchAction: 'none' }}
         onClick={() => filled && onOpen()}
       >
         {filled ? (
@@ -141,6 +145,8 @@ function GridCellView({ cell, idea, label, filled, onOpen, onClear }: GridCellVi
                 src={idea.thumbnail} 
                 alt={label} 
                 className="w-full h-full object-cover" 
+                loading="lazy"
+                decoding="async"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
@@ -155,7 +161,7 @@ function GridCellView({ cell, idea, label, filled, onOpen, onClear }: GridCellVi
               {label}
             </div>
             <button
-              className="absolute top-1 right-1 text-[10px] px-1.5 py-0.5 rounded bg-black/60 hover:bg-black/80 text-white/70 hover:text-white transition-colors"
+              className="absolute top-1 right-1 text-xs px-2 py-1 rounded bg-black/60 hover:bg-black/80 text-white/70 hover:text-white transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onClear();
@@ -166,8 +172,8 @@ function GridCellView({ cell, idea, label, filled, onOpen, onClear }: GridCellVi
           </>
         ) : (
           <div className="w-full h-full flex items-center justify-center p-4">
-            <div className="text-[11px] text-gray-500 border border-dashed border-gray-600 rounded-md px-3 py-2 text-center">
-              Drop idea here
+            <div className="text-[12px] sm:text-xs text-gray-400 border border-dashed border-gray-600 rounded-md px-3 py-2 text-center">
+              Drop here
             </div>
           </div>
         )}

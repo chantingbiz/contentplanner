@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DndContext, useSensor, useSensors, PointerSensor, KeyboardSensor, closestCenter, useDraggable, DragOverlay } from '@dnd-kit/core';
+import { DndContext, useSensor, useSensors, MouseSensor, TouchSensor, KeyboardSensor, closestCenter, useDraggable, DragOverlay } from '@dnd-kit/core';
 import { createPortal } from 'react-dom';
 import { useWorkingIdeas, useAppStore } from '../store';
 import IdeaRow from '../components/ideas/IdeaRow';
@@ -34,11 +34,18 @@ export default function Working() {
   const gridAssign = useAppStore(state => state.gridAssign);
   const gridMoveWithin = useAppStore(state => state.gridMoveWithin);
 
-  // DnD sensors for the entire page
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor)
-  );
+  // DnD sensors for the entire page - separate for desktop/mobile
+  // Mouse: snappy, small distance to avoid mis-drags
+  const mouseSensor = useSensor(MouseSensor, {
+    activationConstraint: { distance: 4 },
+  });
+  
+  // Touch: small press delay so scrolling doesn't trigger drag
+  const touchSensor = useSensor(TouchSensor, {
+    activationConstraint: { delay: 180, tolerance: 6 },
+  });
+  
+  const sensors = useSensors(mouseSensor, touchSensor, useSensor(KeyboardSensor));
 
   // Handle drag start
   const handleDragStart = (event: any) => {
@@ -164,30 +171,30 @@ export default function Working() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="max-w-5xl mx-auto space-y-8">
+      <div className="mx-auto w-full max-w-6xl px-3 sm:px-4 md:px-6 space-y-8 overscroll-contain">
         {/* Planning Grid */}
         <PlanningGrid />
 
         {/* Toast Notification */}
         {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-black/90 backdrop-blur-sm text-white px-6 py-4 rounded-xl shadow-2xl border border-white/20 flex items-center gap-4 animate-in slide-in-from-bottom-4">
+        <div className="fixed bottom-6 right-3 sm:right-6 z-50 bg-black/90 backdrop-blur-sm text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl shadow-2xl border border-white/20 flex items-center gap-3 sm:gap-4 animate-in slide-in-from-bottom-4 max-w-[calc(100vw-1.5rem)] sm:max-w-none">
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="font-medium">{toast.message}</span>
+            <span className="font-medium text-sm sm:text-base">{toast.message}</span>
           </div>
           {toast.ideaId && (
             <button
               onClick={handleUndo}
-              className="px-3 py-1.5 text-sm font-medium bg-brand hover:bg-brand/80 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-xs sm:text-sm font-medium bg-brand hover:bg-brand/80 rounded-lg transition-colors"
             >
               Undo
             </button>
           )}
           <button
             onClick={() => setToast(null)}
-            className="ml-2 text-white/50 hover:text-white transition-colors"
+            className="ml-1 sm:ml-2 text-white/50 hover:text-white transition-colors text-xl"
           >
             ×
           </button>
@@ -269,7 +276,7 @@ export default function Working() {
         <DragOverlay>
           {activeId ? (
             <div 
-              className="aspect-[9/16] w-32 sm:w-36 md:w-40 lg:w-44 rounded-xl overflow-hidden border-2 border-brand bg-gray-900/90 shadow-2xl flex items-center justify-center"
+              className="aspect-[9/16] w-40 sm:w-44 md:w-48 lg:w-52 rounded-xl overflow-hidden border-2 border-brand bg-gray-900/90 shadow-2xl flex items-center justify-center"
             >
               <div className="text-xs text-gray-400">Dragging...</div>
             </div>
@@ -315,13 +322,13 @@ function DraggableIdeaRow({
       className="space-y-3"
     >
       {/* Row with drag handle and POSTED button */}
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2 sm:gap-3">
         {/* Drag Handle - separate from the row content */}
         <div
           ref={setNodeRef}
           {...attributes}
           {...listeners}
-          className={`flex-shrink-0 inline-flex items-center justify-center px-2 py-2 rounded-lg bg-gray-800/60 border border-gray-700/60 hover:bg-gray-800 text-xs text-gray-400 hover:text-gray-300 cursor-grab active:cursor-grabbing select-none transition-colors ${
+          className={`flex-shrink-0 inline-flex items-center justify-center px-2 sm:px-3 py-2 rounded-lg bg-gray-800/60 border border-gray-700/60 hover:bg-gray-800 text-xs text-gray-400 hover:text-gray-300 cursor-grab active:cursor-grabbing select-none transition-colors ${
             isDragging ? 'opacity-40' : ''
           }`}
           style={{ touchAction: 'none' }}
@@ -353,7 +360,7 @@ function DraggableIdeaRow({
         {/* POSTED Button */}
         <button
           onClick={onPosted}
-          className="px-4 py-2 text-sm rounded-lg font-semibold bg-brand hover:bg-brand/80 text-white transition-colors flex-shrink-0 shadow-lg shadow-brand/20"
+          className="px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg font-semibold bg-brand hover:bg-brand/80 text-white transition-colors flex-shrink-0 shadow-lg shadow-brand/20"
           title="Mark as posted and move to Done"
         >
           POSTED

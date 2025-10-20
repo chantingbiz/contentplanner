@@ -26,7 +26,7 @@ export default function WorkspaceSwitcher() {
       {/* Current Workspace Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg border border-brand transition-all duration-200 group"
+        className="flex items-center gap-2.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg border border-brand transition-all duration-200 group h-11 min-h-[44px]"
         aria-label="Switch workspace"
         aria-expanded={isOpen}
       >

@@ -143,39 +143,59 @@ export default function ThumbnailDrop({ thumbnail, onUpdate, onRemove }: Thumbna
     <div className="w-full">
       {/* Preview or Drop Zone */}
       {thumbnail ? (
-        <div className="relative rounded-2xl border border-gray-700/70 bg-gray-900/60 w-full max-w-[300px] sm:max-w-[340px] aspect-[9/16] overflow-hidden group">
-          {/* Thumbnail Preview */}
-          <img
-            src={thumbnail}
-            alt="Thumbnail preview"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
+        <div className="space-y-2 sm:space-y-0">
+          <div className="relative rounded-2xl border border-gray-700/70 bg-gray-900/60 w-full max-w-[260px] sm:max-w-[320px] aspect-[9/16] overflow-hidden group">
+            {/* Thumbnail Preview */}
+            <img
+              src={thumbnail}
+              alt="Thumbnail preview"
+              className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+            />
 
-          {/* Hover Overlay with Actions */}
-          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <div className="flex gap-3">
-              <button
-                onClick={openFilePicker}
-                className="px-4 py-2 text-sm text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-colors backdrop-blur-sm"
-              >
-                Replace
-              </button>
-              <button
-                onClick={handleRemove}
-                className="px-4 py-2 text-sm text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors backdrop-blur-sm"
-              >
-                Remove
-              </button>
+            {/* Hover Overlay with Actions (Desktop Only) */}
+            <div className="hidden sm:flex absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity items-center justify-center">
+              <div className="flex gap-3">
+                <button
+                  onClick={openFilePicker}
+                  className="px-4 py-2 text-sm text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-colors backdrop-blur-sm"
+                >
+                  Replace
+                </button>
+                <button
+                  onClick={handleRemove}
+                  className="px-4 py-2 text-sm text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors backdrop-blur-sm"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
+
+            {/* Image Info - Bottom Corner */}
+            {imageInfo && (
+              <div className="absolute bottom-2 left-2 text-[10px] text-white/70 bg-black/60 backdrop-blur-sm px-2 py-1 rounded">
+                {imageInfo.width}×{imageInfo.height} • {formatBytes(imageInfo.bytes)}
+              </div>
+            )}
           </div>
-
-          {/* Image Info - Bottom Corner */}
-          {imageInfo && (
-            <div className="absolute bottom-2 left-2 text-[10px] text-white/70 bg-black/60 backdrop-blur-sm px-2 py-1 rounded">
-              {imageInfo.width}×{imageInfo.height} • {formatBytes(imageInfo.bytes)}
-            </div>
-          )}
+          
+          {/* Mobile Actions - Below Image */}
+          <div className="flex sm:hidden flex-wrap gap-2">
+            <button
+              onClick={openFilePicker}
+              className="px-3 py-2 text-sm text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition-colors"
+            >
+              Replace
+            </button>
+            <button
+              onClick={handleRemove}
+              className="px-3 py-2 text-sm text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors"
+            >
+              Remove
+            </button>
+          </div>
         </div>
       ) : (
         <div
@@ -190,7 +210,7 @@ export default function ThumbnailDrop({ thumbnail, onUpdate, onRemove }: Thumbna
               openFilePicker();
             }
           }}
-          className={`relative rounded-2xl border-2 border-dashed w-full max-w-[300px] sm:max-w-[340px] aspect-[9/16] overflow-hidden transition-all cursor-pointer ${
+          className={`relative rounded-2xl border-2 border-dashed w-full max-w-[260px] sm:max-w-[320px] aspect-[9/16] overflow-hidden transition-all cursor-pointer ${
             isDragging
               ? 'border-brand bg-brand/10 ring-2 ring-brand/50'
               : 'border-gray-700/70 hover:border-brand/50 hover:bg-white/5'
@@ -200,7 +220,7 @@ export default function ThumbnailDrop({ thumbnail, onUpdate, onRemove }: Thumbna
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center space-y-3 px-4">
               <svg
-                className="w-16 h-16 mx-auto text-white/30"
+                className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-white/30"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -212,13 +232,13 @@ export default function ThumbnailDrop({ thumbnail, onUpdate, onRemove }: Thumbna
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              <div className="text-sm text-white/70">
+              <div className="text-xs sm:text-sm text-white/70">
                 {isProcessing ? (
                   'Processing image...'
                 ) : (
                   <>
-                    <div className="font-medium">Drop image or paste (Ctrl/Cmd+V)</div>
-                    <div className="text-xs text-white/50 mt-1">
+                    <div className="font-medium">Drop image or paste</div>
+                    <div className="text-[11px] sm:text-xs text-white/50 mt-1">
                       Portrait format • 9:16 aspect ratio
                     </div>
                   </>

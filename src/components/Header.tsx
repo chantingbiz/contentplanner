@@ -20,18 +20,18 @@ export default function Header() {
   ];
 
   return (
-    <header className="bg-gray-800 border-b border-gray-700">
-      <div className="px-4 py-4">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Content Grid</h1>
+    <header className="w-full sticky top-0 z-40 bg-[#0b0c0f]/90 backdrop-blur border-b border-gray-700 safe-y">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h1 className="text-xl sm:text-2xl font-bold">Content Grid</h1>
           
           {/* Workspace Switcher */}
           <div className="relative">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors flex items-center gap-2"
+              className="px-3 py-2 sm:px-4 sm:py-2 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors flex items-center gap-2 text-sm sm:text-base"
             >
-              <span>{currentWorkspace?.name || 'Select Workspace'}</span>
+              <span className="max-w-[120px] sm:max-w-none truncate">{currentWorkspace?.name || 'Select Workspace'}</span>
               <svg
                 className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
                 fill="none"
@@ -64,14 +64,14 @@ export default function Header() {
         </div>
         
         {/* Navigation Tabs */}
-        <nav className="flex gap-1">
+        <nav className="flex flex-wrap gap-1">
           {tabs.map((tab) => (
             <NavLink
               key={tab.path}
               to={tab.path}
               end={tab.path === '/'}
               className={({ isActive }) =>
-                `px-4 py-2 rounded-md transition-colors ${
+                `px-3 py-2 sm:px-4 sm:py-2 text-sm sm:text-[13px] rounded-md transition-colors ${
                   isActive
                     ? 'bg-blue-500 text-white'
                     : 'text-gray-300 hover:bg-gray-700'

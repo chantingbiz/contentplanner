@@ -6,4 +6,21 @@
 /* Dark base */
 :root { color-scheme: dark; }
 html, body, #root { height: 100%; }
-body { background: #0b0c0f; color: white; }
+
+/* Mobile polish */
+body {
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  overscroll-behavior-y: none;
+  background: #0b0c0f;
+  color: white;
+}
+
+:root {
+  /* iOS safe areas */
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+
+/* Utility opts */
+.touch-none { touch-action: none; }
+.safe-y { padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }

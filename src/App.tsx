@@ -7,63 +7,103 @@ import ThemeProvider from "./theme/ThemeProvider";
 import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
 
 export default function App() {
-  const linkBase =
-    "px-3 py-2 rounded text-sm hover:bg-white/10 transition-colors";
-  const linkActive = "bg-white/10";
-
   return (
     <ThemeProvider>
       <div className="min-h-screen bg-[#0b0c0f] text-white">
         {/* Top nav */}
-        <header className="border-b border-white/10 relative">
-          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
-            <div className="font-semibold">Content Planner</div>
-            
-            {/* Workspace Switcher with Avatar */}
-            <WorkspaceSwitcher />
-            
-            <nav className="flex items-center gap-2 ml-auto">
-            <NavLink
-              to="/brainstorming"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
+        <header className="sticky top-0 z-40 bg-[#0b0c0f]/90 backdrop-blur border-b border-white/10 safe-y">
+          <div className="mx-auto w-full max-w-6xl px-3 sm:px-4">
+            {/* Top row: brand + workspace */}
+            <div className="flex items-center justify-between py-2">
+              <div className="text-sm sm:text-base font-semibold">Content Planner</div>
+              <WorkspaceSwitcher />
+            </div>
+
+            {/* Nav row: responsive horizontal scroll */}
+            <nav
+              className="relative -mx-3 px-3 pb-2 sm:pb-3"
+              aria-label="Primary navigation"
             >
-              Brainstorming
-            </NavLink>
-            <NavLink
-              to="/working"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Working Ideas
-            </NavLink>
-            <NavLink
-              to="/done"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Done
-            </NavLink>
-            <NavLink
-              to="/settings"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? linkActive : ""}`
-              }
-            >
-              Settings
-            </NavLink>
-          </nav>
-        </div>
+              <div
+                className="
+                  flex gap-2 sm:gap-3
+                  overflow-x-auto overscroll-x-contain
+                  snap-x snap-mandatory
+                  scrollbar-thin scrollbar-thumb-gray-700/60
+                  md:overflow-x-visible
+                  md:flex-wrap md:snap-none
+                "
+              >
+                <NavLink
+                  to="/brainstorming"
+                  className={({ isActive }) =>
+                    [
+                      "snap-start shrink-0",
+                      "px-3 py-2 rounded-md border",
+                      "min-h-[44px] text-xs sm:text-sm flex items-center",
+                      isActive
+                        ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                        : "border-white/10 bg-white/5 hover:bg-white/10 text-gray-200"
+                    ].join(" ")
+                  }
+                >
+                  Brainstorming
+                </NavLink>
+                <NavLink
+                  to="/working"
+                  className={({ isActive }) =>
+                    [
+                      "snap-start shrink-0",
+                      "px-3 py-2 rounded-md border",
+                      "min-h-[44px] text-xs sm:text-sm flex items-center",
+                      isActive
+                        ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                        : "border-white/10 bg-white/5 hover:bg-white/10 text-gray-200"
+                    ].join(" ")
+                  }
+                >
+                  Working Ideas
+                </NavLink>
+                <NavLink
+                  to="/done"
+                  className={({ isActive }) =>
+                    [
+                      "snap-start shrink-0",
+                      "px-3 py-2 rounded-md border",
+                      "min-h-[44px] text-xs sm:text-sm flex items-center",
+                      isActive
+                        ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                        : "border-white/10 bg-white/5 hover:bg-white/10 text-gray-200"
+                    ].join(" ")
+                  }
+                >
+                  Done
+                </NavLink>
+                <NavLink
+                  to="/settings"
+                  className={({ isActive }) =>
+                    [
+                      "snap-start shrink-0",
+                      "px-3 py-2 rounded-md border",
+                      "min-h-[44px] text-xs sm:text-sm flex items-center",
+                      isActive
+                        ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                        : "border-white/10 bg-white/5 hover:bg-white/10 text-gray-200"
+                    ].join(" ")
+                  }
+                >
+                  Settings
+                </NavLink>
+              </div>
+            </nav>
+          </div>
         
-        {/* Animated brand gradient strip */}
-        <div className="brand-gradient-strip" aria-hidden="true" />
-      </header>
+          {/* Animated brand gradient strip */}
+          <div className="brand-gradient-strip" aria-hidden="true" />
+        </header>
 
       {/* Routes */}
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 overscroll-contain">
         <Routes>
           <Route path="/" element={<Navigate to="/working" replace />} />
           <Route path="/brainstorming" element={<Brainstorming />} />

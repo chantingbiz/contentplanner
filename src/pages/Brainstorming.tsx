@@ -99,10 +99,10 @@ export default function Brainstorming() {
   );
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6">Brainstorming</h1>
+    <div className="w-full">
+      <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-4 sm:mb-6">Brainstorming</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Left Card: Bins */}
         <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
           <h2 className="text-xl font-semibold mb-4">Bins</h2>

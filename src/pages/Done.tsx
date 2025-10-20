@@ -46,11 +46,11 @@ export default function Done() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-4xl mx-auto space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold mb-2">Done</h1>
-        <p className="text-white/60">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2">Done</h1>
+        <p className="text-sm sm:text-base text-white/60">
           Posted content history. These ideas have been published.
         </p>
       </div>
