@@ -1,0 +1,15 @@
+/**
+ * Additional utility classes for special browser behaviors
+ */
+
+@layer utilities {
+  /* Disable CSS scroll anchoring to prevent scroll position jumps */
+  .overflow-anchor-none {
+    overflow-anchor: none;
+  }
+}
+
+
+
+
+

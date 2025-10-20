@@ -1,0 +1,141 @@
+/**
+ * Brand Theme Utilities
+ * 
+ * CSS custom properties set by ThemeProvider based on workspace
+ * Utilities for consistent brand styling across the app
+ */
+
+/* CSS Variables (set dynamically by ThemeProvider) */
+:root {
+  --brand-bg: #78350f;
+  --brand-bg-secondary: #d97706;
+  --brand-accent: #fbbf24;
+  --brand-text: #fef3c7;
+  --brand-border: #ff9f1c;
+}
+
+/* Utility Classes */
+@layer utilities {
+  /* Background utilities */
+  .bg-brand {
+    background-color: var(--brand-bg);
+  }
+  
+  .bg-brand-secondary {
+    background-color: var(--brand-bg-secondary);
+  }
+
+  /* Text utilities */
+  .text-brand {
+    color: var(--brand-accent);
+  }
+
+  .text-brand-muted {
+    color: var(--brand-text);
+  }
+
+  /* Border utilities */
+  .border-brand {
+    border-color: var(--brand-accent);
+  }
+
+  /* Gradient utilities */
+  .bg-brand-gradient {
+    background: linear-gradient(
+      90deg,
+      var(--brand-bg) 0%,
+      var(--brand-accent) 100%
+    );
+  }
+
+  .bg-brand-gradient-vertical {
+    background: linear-gradient(
+      180deg,
+      var(--brand-bg) 0%,
+      var(--brand-accent) 100%
+    );
+  }
+
+  /* Animated gradient strip (respects reduced motion) */
+  .brand-gradient-strip {
+    position: relative;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      var(--brand-bg) 0%,
+      var(--brand-accent) 50%,
+      var(--brand-bg) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  /* Animate gradient only if motion is allowed */
+  @media (prefers-reduced-motion: no-preference) {
+    .brand-gradient-strip {
+      animation: brand-gradient-slide 3s ease-in-out infinite;
+    }
+  }
+
+  /* Ring utilities */
+  .ring-brand {
+    --tw-ring-color: var(--brand-accent);
+  }
+
+  /* Shadow utilities */
+  .shadow-brand {
+    box-shadow: 0 4px 6px -1px rgba(251, 191, 36, 0.1),
+                0 2px 4px -1px rgba(251, 191, 36, 0.06);
+  }
+
+  /* Glow effect */
+  .glow-brand {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+  }
+}
+
+/* Keyframes */
+@keyframes brand-gradient-slide {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Hover transitions */
+@layer utilities {
+  .hover-brand-glow {
+    transition: box-shadow 0.3s ease;
+  }
+
+  .hover-brand-glow:hover {
+    box-shadow: 0 0 20px var(--brand-accent);
+  }
+}
+
+/* Focus states with brand colors */
+@layer utilities {
+  .focus-brand {
+    transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .focus-brand:focus {
+    outline: 2px solid var(--brand-accent);
+    outline-offset: 2px;
+  }
+
+  .focus-brand:focus-visible {
+    outline: 2px solid var(--brand-accent);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.1);
+  }
+}
+
+
+
+
+
