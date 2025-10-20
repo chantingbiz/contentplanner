@@ -24,6 +24,11 @@ ReactDOM.createRoot(rootEl).render(
 
 // Initialize backup adapter after render
 // This will restore from cloud if localStorage is empty, then start auto-backup
-initBackupAdapter(store.getState()).catch(err => {
-  console.warn('[App] Failed to initialize backup adapter:', err);
-});
+initBackupAdapter(store.getState())
+  .then(({ forceBackup }) => {
+    // Export forceBackup for future use (e.g., Settings button)
+    (window as any).__forceBackup = forceBackup;
+  })
+  .catch(err => {
+    console.warn('[backup] init error', err);
+  });

@@ -39,8 +39,6 @@ function hasLocalData(): boolean {
  */
 async function restoreFromCloud(workspace: string, store: AppStore): Promise<boolean> {
   try {
-    console.log(`[Backup] Attempting to restore from cloud for workspace: ${workspace}`);
-    
     const { data, error } = await supabase
       .from('backups')
       .select('data')
@@ -50,23 +48,21 @@ async function restoreFromCloud(workspace: string, store: AppStore): Promise<boo
     if (error) {
       if (error.code === 'PGRST116') {
         // No row found, that's okay
-        console.log('[Backup] No cloud backup found for this workspace');
         return false;
       }
-      console.warn('[Backup] Failed to fetch backup:', error.message);
+      console.warn('[backup] restore error', error.message);
       return false;
     }
 
     if (data?.data) {
-      console.log('[Backup] Restoring state from cloud...');
+      console.info('[backup] first-load restore', workspace);
       store.importState(data.data as Partial<AppData>);
-      console.log('[Backup] ✓ State restored from cloud');
       return true;
     }
 
     return false;
   } catch (err) {
-    console.warn('[Backup] Restore failed:', err);
+    console.warn('[backup] restore error', err);
     return false;
   }
 }
@@ -76,11 +72,14 @@ async function restoreFromCloud(workspace: string, store: AppStore): Promise<boo
  */
 async function backupToCloud(workspace: string, data: AppData): Promise<void> {
   try {
+    console.info('[backup] upsert start', workspace);
+    
+    const updated_at = new Date().toISOString();
     const payload = {
       workspace,
       data: data as any, // JSONB column
       version: 1,
-      updated_at: new Date().toISOString(),
+      updated_at,
     };
 
     const { error } = await supabase
@@ -90,12 +89,12 @@ async function backupToCloud(workspace: string, data: AppData): Promise<void> {
       });
 
     if (error) {
-      console.warn('[Backup] Failed to upsert backup:', error.message);
+      console.warn('[backup] upsert error', error);
     } else {
-      console.log(`[Backup] ✓ Backed up to cloud for workspace: ${workspace}`);
+      console.info('[backup] upsert ok', { updated_at });
     }
   } catch (err) {
-    console.warn('[Backup] Backup failed:', err);
+    console.warn('[backup] upsert error', err);
   }
 }
 
@@ -222,21 +221,18 @@ function flushPendingBackup(): void {
  * - Checks if localStorage is empty and restores from cloud if needed
  * - Sets up store change listener with debounced backups
  * - Registers unload handler for flush
+ * 
+ * Returns { forceBackup } for manual triggering later
  */
-export async function initBackupAdapter(store: AppStore): Promise<void> {
+export async function initBackupAdapter(store: AppStore): Promise<{ forceBackup: () => Promise<void> }> {
   storeInstance = store;
-  
-  console.log('[Backup] Initializing backup adapter...');
   
   // Step 1: Check if we need to restore from cloud
   const hasLocal = hasLocalData();
   
   if (!hasLocal) {
     const workspace = store.currentWorkspaceId;
-    console.log('[Backup] Local storage is empty, checking cloud...');
     await restoreFromCloud(workspace, store);
-  } else {
-    console.log('[Backup] Local storage exists, skipping cloud restore');
   }
   
   // Step 2: Subscribe to store changes for auto-backup
@@ -252,30 +248,22 @@ export async function initBackupAdapter(store: AppStore): Promise<void> {
   };
   
   // Check for changes every 1 second
-  const intervalId = setInterval(checkForChanges, 1000);
+  setInterval(checkForChanges, 1000);
   
   // Step 3: Register unload handler
   window.addEventListener('beforeunload', flushPendingBackup);
   
-  // Cleanup function (not used currently, but good practice)
-  return () => {
-    clearInterval(intervalId);
-    window.removeEventListener('beforeunload', flushPendingBackup);
-    clearTimers();
+  // Return forceBackup function for manual use
+  return {
+    forceBackup: async () => {
+      if (!storeInstance) {
+        console.warn('[backup] Cannot force backup - adapter not initialized');
+        return;
+      }
+      clearTimers();
+      performBackup(storeInstance);
+    }
   };
 }
 
-/**
- * Force an immediate backup (for Settings button later)
- */
-export function forceBackup(): void {
-  if (!storeInstance) {
-    console.warn('[Backup] Cannot force backup - adapter not initialized');
-    return;
-  }
-  
-  console.log('[Backup] Forcing immediate backup...');
-  clearTimers();
-  performBackup(storeInstance);
-}
 
