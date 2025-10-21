@@ -1,4 +1,5 @@
 import HashtagDefaultsPanel from '../components/settings/HashtagDefaultsPanel';
+import BackupPanel from '../components/settings/BackupPanel';
 
 export default function Settings() {
   return (
@@ -10,6 +11,7 @@ export default function Settings() {
         </p>
       </div>
 
+      <BackupPanel />
       <HashtagDefaultsPanel />
     </div>
   );
