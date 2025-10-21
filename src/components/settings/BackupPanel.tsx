@@ -1,68 +1,84 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../../store';
 import { supabase } from '../../lib/supabaseClient';
+import { setAutoSync, pullLatest, getSyncStatus } from '../../lib/backupAdapter';
 
 /**
- * BackupPanel - Manual cloud backup control
+ * BackupPanel - Cloud backup and cross-device sync control
  * 
- * - Force an immediate backup to Supabase
- * - Shows last backup status and timestamp
- * - Uses same normalized workspace key as auto-backup
+ * - Backup Now: Force immediate backup to Supabase
+ * - Pull Latest: Fetch latest from cloud
+ * - Auto-sync toggle: Enable/disable 30s polling
+ * - Shows sync status and timestamps
  */
 export default function BackupPanel() {
   const currentWorkspaceId = useAppStore(state => state.currentWorkspaceId);
   const store = useAppStore(state => state);
   
-  const [status, setStatus] = useState<'idle' | 'backing-up' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'backing-up' | 'pulling' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState<string>('');
   const [timestamp, setTimestamp] = useState<string>('');
+  const [syncStatus, setSyncStatus] = useState(getSyncStatus());
+  
+  // Refresh sync status every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSyncStatus(getSyncStatus());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleBackupNow = async () => {
     setStatus('backing-up');
     setMessage('Backing up...');
     
     try {
-      // Normalize workspace key (same as auto-backup)
-      const wk = currentWorkspaceId.trim().toLowerCase();
-      
-      // Build persisted snapshot (same structure as localStorage)
-      const snapshot = {
-        version: store.version,
-        workspaces: store.workspaces,
-        bins: store.bins,
-        ideas: store.ideas,
-        posts: store.posts,
-        currentWorkspaceId: store.currentWorkspaceId,
-        done: store.done,
-        gridsByWorkspace: store.gridsByWorkspace,
-      };
-      
-      const bytes = JSON.stringify(snapshot).length;
-      console.info('[backup] force upsert start', { wk, bytes });
-      
-      // Upsert to Supabase
-      const { error, status: httpStatus } = await supabase
-        .from('backups')
-        .upsert(
-          {
-            workspace: wk,
-            data: snapshot as any,
-            version: 1,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'workspace' }
-        );
-      
-      if (error) {
-        console.warn('[backup] force upsert ERROR', error);
-        setStatus('error');
-        setMessage(`Error: ${error.message}`);
+      // Use forceBackup from window (set by main.tsx)
+      if ((window as any).__forceBackup) {
+        await (window as any).__forceBackup('manual-ui');
+        setStatus('success');
+        setMessage('Backup successful');
         setTimestamp(new Date().toLocaleTimeString());
       } else {
-        console.info('[backup] force upsert OK', { status: httpStatus });
-        setStatus('success');
-        setMessage(`Backup successful (${bytes.toLocaleString()} bytes)`);
-        setTimestamp(new Date().toLocaleTimeString());
+        // Fallback to direct upsert
+        const wk = currentWorkspaceId.trim().toLowerCase();
+        const snapshot = {
+          version: store.version,
+          workspaces: store.workspaces,
+          bins: store.bins,
+          ideas: store.ideas,
+          posts: store.posts,
+          currentWorkspaceId: store.currentWorkspaceId,
+          done: store.done,
+          gridsByWorkspace: store.gridsByWorkspace,
+        };
+        
+        const bytes = JSON.stringify(snapshot).length;
+        console.info('[backup] force upsert start', { wk, bytes });
+        
+        const { error, status: httpStatus } = await supabase
+          .from('backups')
+          .upsert(
+            {
+              workspace: wk,
+              data: snapshot as any,
+              version: 1,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'workspace' }
+          );
+        
+        if (error) {
+          console.warn('[backup] force upsert ERROR', error);
+          setStatus('error');
+          setMessage(`Error: ${error.message}`);
+          setTimestamp(new Date().toLocaleTimeString());
+        } else {
+          console.info('[backup] force upsert OK', { status: httpStatus });
+          setStatus('success');
+          setMessage(`Backup successful (${bytes.toLocaleString()} bytes)`);
+          setTimestamp(new Date().toLocaleTimeString());
+        }
       }
     } catch (err: any) {
       console.warn('[backup] force upsert ERROR', err);
@@ -70,6 +86,27 @@ export default function BackupPanel() {
       setMessage(`Exception: ${err.message || 'Unknown error'}`);
       setTimestamp(new Date().toLocaleTimeString());
     }
+  };
+  
+  const handlePullLatest = async () => {
+    setStatus('pulling');
+    setMessage('Pulling from cloud...');
+    
+    try {
+      await pullLatest();
+      setStatus('success');
+      setMessage('Pull successful - local state updated');
+      setTimestamp(new Date().toLocaleTimeString());
+    } catch (err: any) {
+      setStatus('error');
+      setMessage(`Pull failed: ${err.message || 'Unknown error'}`);
+      setTimestamp(new Date().toLocaleTimeString());
+    }
+  };
+  
+  const handleToggleAutoSync = (enabled: boolean) => {
+    setAutoSync(enabled);
+    setSyncStatus(getSyncStatus());
   };
 
   return (
@@ -90,27 +127,69 @@ export default function BackupPanel() {
             <div className="text-sm text-white/50">Current Workspace</div>
             <div className="text-lg font-semibold">{currentWorkspaceId}</div>
             <div className="text-xs text-white/40 mt-1">
-              Normalized key: {currentWorkspaceId.trim().toLowerCase()}
+              Normalized key: {syncStatus.workspace}
             </div>
           </div>
         </div>
 
-        {/* Backup Button */}
-        <div className="space-y-3">
+        {/* Auto-Sync Toggle */}
+        <div className="flex items-center justify-between py-3 px-4 bg-white/5 rounded-lg border border-white/10">
+          <div>
+            <div className="font-medium text-sm">Auto-Sync</div>
+            <div className="text-xs text-white/50 mt-0.5">
+              Poll for updates every 30s
+            </div>
+          </div>
+          <button
+            onClick={() => handleToggleAutoSync(!syncStatus.autoSyncEnabled)}
+            className={`
+              relative w-12 h-6 rounded-full transition-colors
+              ${syncStatus.autoSyncEnabled ? 'bg-brand' : 'bg-gray-600'}
+            `}
+          >
+            <div
+              className={`
+                absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform
+                ${syncStatus.autoSyncEnabled ? 'translate-x-6' : 'translate-x-0'}
+              `}
+            />
+          </button>
+        </div>
+
+        {/* Sync Status Info */}
+        <div className="space-y-2 text-xs text-white/50 bg-white/5 rounded-lg p-3">
+          <div className="flex justify-between">
+            <span>Local last save:</span>
+            <span className="font-mono">{syncStatus.lastLocalSaveAt || 'Never'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Cloud updated:</span>
+            <span className="font-mono">{syncStatus.lastRemoteUpdatedAt || 'Unknown'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Local changes:</span>
+            <span className={syncStatus.dirty ? 'text-yellow-400' : 'text-green-400'}>
+              {syncStatus.dirty ? 'Unsaved' : 'Clean'}
+            </span>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <button
             onClick={handleBackupNow}
-            disabled={status === 'backing-up'}
+            disabled={status === 'backing-up' || status === 'pulling'}
             className={`
-              w-full sm:w-auto px-6 py-3 rounded-lg font-semibold text-white
+              flex-1 px-6 py-3 rounded-lg font-semibold text-white
               transition-all duration-200
-              ${status === 'backing-up'
+              ${status === 'backing-up' || status === 'pulling'
                 ? 'bg-gray-600 cursor-not-allowed'
                 : 'bg-brand hover:bg-brand/90 shadow-lg shadow-brand/20'
               }
             `}
           >
             {status === 'backing-up' ? (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center justify-center gap-2">
                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -119,6 +198,31 @@ export default function BackupPanel() {
               </span>
             ) : (
               'Backup Now'
+            )}
+          </button>
+          
+          <button
+            onClick={handlePullLatest}
+            disabled={status === 'backing-up' || status === 'pulling'}
+            className={`
+              flex-1 px-6 py-3 rounded-lg font-semibold
+              transition-all duration-200
+              ${status === 'backing-up' || status === 'pulling'
+                ? 'bg-gray-600 text-white cursor-not-allowed'
+                : 'bg-white/10 hover:bg-white/20 text-white border border-white/20'
+              }
+            `}
+          >
+            {status === 'pulling' ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Pulling...
+              </span>
+            ) : (
+              'Pull Latest'
             )}
           </button>
 
@@ -155,10 +259,19 @@ export default function BackupPanel() {
         </div>
 
         {/* Help Text */}
-        <div className="pt-4 border-t border-white/10 text-xs text-white/40">
+        <div className="pt-4 border-t border-white/10 text-xs text-white/40 space-y-2">
           <p>
-            This creates/updates a row in the <code className="px-1.5 py-0.5 bg-white/10 rounded">backups</code> table
-            with your current workspace state. Check the browser console for detailed logs.
+            <strong>Backup Now:</strong> Push current state to cloud immediately.
+          </p>
+          <p>
+            <strong>Pull Latest:</strong> Fetch latest cloud state and replace local (confirms if you have unsaved changes).
+          </p>
+          <p>
+            <strong>Auto-Sync:</strong> When ON, polls every 30s and auto-pulls if cloud is newer and local is clean.
+          </p>
+          <p className="pt-2 text-white/30">
+            All operations use the <code className="px-1.5 py-0.5 bg-white/10 rounded">backups</code> table.
+            Check browser console for detailed logs.
           </p>
         </div>
       </div>
