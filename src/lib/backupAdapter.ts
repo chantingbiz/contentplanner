@@ -118,7 +118,7 @@ async function backupToCloud(workspace: string, data: AppData, reason: string): 
     const wk = normalizeWorkspaceKey(workspace);
     const bytes = JSON.stringify(data).length;
     
-    if (import.meta.env.DEV) console.info('[backup] debounced upsert', { wk, bytes });
+    if (import.meta.env.DEV) console.info('[backup] debounced upsert', { wk, bytes, reason });
     
     const payload = {
       workspace: wk,
@@ -249,7 +249,7 @@ function performBackup(store: AppStore, reason: string): void {
 /**
  * Start 60s watchdog timer - safety net for missed flushes
  */
-function startWatchdogTimer(store: AppStore): void {
+function startWatchdogTimer(_store: AppStore): void {
   if (watchdogTimer) {
     clearTimeout(watchdogTimer);
   }
