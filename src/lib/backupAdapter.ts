@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { AppStore, AppData } from '../store';
+import { store as storeAPI } from '../store';
 
 /**
  * Backup Adapter - Mirrors localStorage to Supabase per workspace
@@ -17,14 +18,15 @@ import type { AppStore, AppData } from '../store';
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
-let safetyTimer: ReturnType<typeof setTimeout> | null = null;
-let lastSaveTime = 0;
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+let lastFlushTime = 0;
 let storeInstance: AppStore | null = null;
 let isDirty = false;
+let lastStateHash = '';
 
 const DEBOUNCE_MS = 2500;
 const MAX_WAIT_MS = 10000;
-const SAFETY_INTERVAL_MS = 60000; // 60 seconds
+const WATCHDOG_INTERVAL_MS = 60000; // 60 seconds
 
 /**
  * Normalize workspace key (case-insensitive)
@@ -86,16 +88,15 @@ async function restoreFromCloud(workspace: string, store: AppStore): Promise<boo
 async function backupToCloud(workspace: string, data: AppData, reason: string): Promise<void> {
   try {
     const wk = normalizeWorkspaceKey(workspace);
-    const at = new Date().toISOString();
+    const bytes = JSON.stringify(data).length;
     
-    console.info('[backup] flush reason:', reason);
-    console.info('[backup] preparing upsert', { workspace: wk, bytes: JSON.stringify(data).length });
+    console.info('[backup] debounced upsert', { wk, bytes });
     
     const payload = {
       workspace: wk,
       data: data as any, // JSONB column
       version: 1,
-      updated_at: at,
+      updated_at: new Date().toISOString(),
     };
 
     const { error, status } = await supabase
@@ -105,13 +106,13 @@ async function backupToCloud(workspace: string, data: AppData, reason: string): 
       });
 
     if (error) {
-      console.warn('[backup] ❌ upsert failed', { error, status });
+      console.warn('[backup] ❌ upsert error', error);
     } else {
-      console.info('[backup] ✅ upsert ok', { status, workspace: wk });
+      console.info('[backup] ✅ upsert ok', { status });
       isDirty = false; // Clear dirty flag on successful backup
     }
   } catch (err) {
-    console.warn('[backup] upsert ERROR', err);
+    console.warn('[backup] ❌ upsert error', err);
   }
 }
 
@@ -136,14 +137,13 @@ function getDataSnapshot(store: AppStore): AppData {
  */
 function scheduleBackup(store: AppStore): void {
   isDirty = true;
-  console.info('[backup] store change detected', new Date().toISOString());
-  console.info('[backup] change @', new Date().toISOString());
+  console.info('[backup] change', new Date().toISOString());
   
   const now = Date.now();
-  const timeSinceLastSave = now - lastSaveTime;
+  const timeSinceLastFlush = now - lastFlushTime;
 
   // If max wait time has passed, force save immediately
-  if (timeSinceLastSave >= MAX_WAIT_MS) {
+  if (timeSinceLastFlush >= MAX_WAIT_MS) {
     clearTimers();
     performBackup(store, 'max-wait');
     return;
@@ -162,7 +162,7 @@ function scheduleBackup(store: AppStore): void {
 
   // Set up max wait timer if not already set
   if (!maxWaitTimer) {
-    const remainingMaxWait = MAX_WAIT_MS - timeSinceLastSave;
+    const remainingMaxWait = MAX_WAIT_MS - timeSinceLastFlush;
     maxWaitTimer = setTimeout(() => {
       maxWaitTimer = null;
       if (debounceTimer) {
@@ -186,9 +186,9 @@ function clearTimers(): void {
     clearTimeout(maxWaitTimer);
     maxWaitTimer = null;
   }
-  if (safetyTimer) {
-    clearTimeout(safetyTimer);
-    safetyTimer = null;
+  if (watchdogTimer) {
+    clearTimeout(watchdogTimer);
+    watchdogTimer = null;
   }
 }
 
@@ -198,10 +198,12 @@ function clearTimers(): void {
 function performBackup(store: AppStore, reason: string): void {
   if (!isDirty) return; // Skip if no changes
   
+  console.info('[backup] flush reason:', reason);
+  
   const workspace = store.currentWorkspaceId;
   const data = getDataSnapshot(store);
   
-  lastSaveTime = Date.now();
+  lastFlushTime = Date.now();
   clearTimers();
   
   // Fire and forget - don't await to avoid blocking
@@ -209,23 +211,23 @@ function performBackup(store: AppStore, reason: string): void {
     console.warn('[backup] backup error:', err);
   });
   
-  // Restart safety timer
-  startSafetyTimer(store);
+  // Restart watchdog timer
+  startWatchdogTimer(store);
 }
 
 /**
- * Start 60s safety interval timer
+ * Start 60s watchdog timer - safety net for missed flushes
  */
-function startSafetyTimer(store: AppStore): void {
-  if (safetyTimer) {
-    clearTimeout(safetyTimer);
+function startWatchdogTimer(store: AppStore): void {
+  if (watchdogTimer) {
+    clearTimeout(watchdogTimer);
   }
   
-  safetyTimer = setTimeout(() => {
+  watchdogTimer = setTimeout(() => {
     if (isDirty && storeInstance) {
-      performBackup(storeInstance, 'safety-60s');
+      performBackup(storeInstance, 'watchdog-60s');
     }
-  }, SAFETY_INTERVAL_MS);
+  }, WATCHDOG_INTERVAL_MS);
 }
 
 /**
@@ -239,11 +241,20 @@ function flushPendingBackup(reason: string): void {
 }
 
 /**
- * Handle visibility change
+ * Handle visibility change - flush when tab becomes hidden
  */
 function handleVisibilityChange(): void {
-  if (document.hidden && isDirty && storeInstance) {
-    flushPendingBackup('visibility-hidden');
+  if (document.visibilityState === 'hidden' && isDirty && storeInstance) {
+    flushPendingBackup('visibilitychange');
+  }
+}
+
+/**
+ * Handle beforeunload - best effort flush on page close
+ */
+function handleBeforeUnload(): void {
+  if (isDirty && storeInstance) {
+    flushPendingBackup('beforeunload');
   }
 }
 
@@ -251,8 +262,8 @@ function handleVisibilityChange(): void {
  * Initialize the backup adapter
  * 
  * - Checks if localStorage is empty and restores from cloud if needed
- * - Sets up store change listener with debounced backups
- * - Registers multiple flush triggers (unload, visibility, safety interval)
+ * - Subscribes to store changes with debounced backups
+ * - Registers multiple flush triggers (unload, visibility, watchdog)
  * 
  * Returns { forceBackup } for manual triggering later
  */
@@ -267,29 +278,27 @@ export async function initBackupAdapter(store: AppStore): Promise<{ forceBackup:
     await restoreFromCloud(workspace, store);
   }
   
-  // Step 2: Subscribe to store changes for auto-backup
-  // We'll use a simple interval check approach since store doesn't expose change events
-  let lastState = JSON.stringify(getDataSnapshot(store));
+  // Step 2: Subscribe to store changes using the store's subscription mechanism
+  // Initialize state hash after potential restore
+  lastStateHash = JSON.stringify(getDataSnapshot(store));
   
-  const checkForChanges = () => {
-    const currentState = JSON.stringify(getDataSnapshot(store));
-    if (currentState !== lastState) {
-      lastState = currentState;
-      scheduleBackup(store);
+  storeAPI.subscribe(() => {
+    const currentState = storeAPI.getState();
+    const currentHash = JSON.stringify(getDataSnapshot(currentState));
+    if (currentHash !== lastStateHash) {
+      lastStateHash = currentHash;
+      scheduleBackup(currentState);
     }
-  };
-  
-  // Check for changes every 1 second
-  setInterval(checkForChanges, 1000);
+  });
   
   // Step 3: Register event handlers
-  window.addEventListener('beforeunload', () => flushPendingBackup('beforeunload'));
+  window.addEventListener('beforeunload', handleBeforeUnload);
   document.addEventListener('visibilitychange', handleVisibilityChange);
   
-  // Step 4: Start safety timer
-  startSafetyTimer(store);
+  // Step 4: Start 60s watchdog timer
+  startWatchdogTimer(store);
   
-  // Return forceBackup function for manual use (e.g., route changes)
+  // Return forceBackup function for manual use (e.g., Settings button)
   return {
     forceBackup: async (reason = 'manual') => {
       if (!storeInstance) {
@@ -298,7 +307,7 @@ export async function initBackupAdapter(store: AppStore): Promise<{ forceBackup:
       }
       clearTimers();
       performBackup(storeInstance, reason);
-      startSafetyTimer(storeInstance);
+      startWatchdogTimer(storeInstance);
     }
   };
 }
