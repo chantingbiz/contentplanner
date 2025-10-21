@@ -7,7 +7,8 @@ import type { AppStore, AppData } from '../store';
  * Behavior:
  * - On init: If localStorage is empty, restore from Supabase (once)
  * - On changes: Debounce ~2500ms (max 10s) and upsert to Supabase
- * - On unload: Flush any pending saves (best effort)
+ * - Multiple flush triggers: unload, visibility change, 60s safety interval
+ * - Workspace keys normalized (trim + lowercase) for case-insensitive storage
  * 
  * Table: backups
  * Columns: workspace (text), data (jsonb), version (int), updated_at (timestamptz), id (uuid)
@@ -16,11 +17,21 @@ import type { AppStore, AppData } from '../store';
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+let safetyTimer: ReturnType<typeof setTimeout> | null = null;
 let lastSaveTime = 0;
 let storeInstance: AppStore | null = null;
+let isDirty = false;
 
 const DEBOUNCE_MS = 2500;
 const MAX_WAIT_MS = 10000;
+const SAFETY_INTERVAL_MS = 60000; // 60 seconds
+
+/**
+ * Normalize workspace key (case-insensitive)
+ */
+function normalizeWorkspaceKey(workspace: string): string {
+  return workspace.trim().toLowerCase();
+}
 
 /**
  * Check if localStorage has data for the current workspace
@@ -39,10 +50,12 @@ function hasLocalData(): boolean {
  */
 async function restoreFromCloud(workspace: string, store: AppStore): Promise<boolean> {
   try {
+    const wk = normalizeWorkspaceKey(workspace);
+    
     const { data, error } = await supabase
       .from('backups')
       .select('data')
-      .eq('workspace', workspace)
+      .eq('workspace', wk)
       .single();
 
     if (error) {
@@ -55,7 +68,7 @@ async function restoreFromCloud(workspace: string, store: AppStore): Promise<boo
     }
 
     if (data?.data) {
-      console.info('[backup] first-load restore', workspace);
+      console.info('[backup] first-load restore', wk);
       store.importState(data.data as Partial<AppData>);
       return true;
     }
@@ -70,16 +83,18 @@ async function restoreFromCloud(workspace: string, store: AppStore): Promise<boo
 /**
  * Upsert current state to Supabase
  */
-async function backupToCloud(workspace: string, data: AppData): Promise<void> {
+async function backupToCloud(workspace: string, data: AppData, reason: string): Promise<void> {
   try {
-    console.info('[backup] upsert start', workspace);
+    const wk = normalizeWorkspaceKey(workspace);
+    const at = new Date().toISOString();
     
-    const updated_at = new Date().toISOString();
+    console.info('[backup] flush reason:', reason);
+    
     const payload = {
-      workspace,
+      workspace: wk,
       data: data as any, // JSONB column
       version: 1,
-      updated_at,
+      updated_at: at,
     };
 
     const { error } = await supabase
@@ -89,12 +104,13 @@ async function backupToCloud(workspace: string, data: AppData): Promise<void> {
       });
 
     if (error) {
-      console.warn('[backup] upsert error', error);
+      console.warn('[backup] upsert ERROR', error);
     } else {
-      console.info('[backup] upsert ok', { updated_at });
+      console.info('[backup] upsert OK', { wk, at });
+      isDirty = false; // Clear dirty flag on successful backup
     }
   } catch (err) {
-    console.warn('[backup] upsert error', err);
+    console.warn('[backup] upsert ERROR', err);
   }
 }
 
@@ -118,13 +134,16 @@ function getDataSnapshot(store: AppStore): AppData {
  * Schedule a debounced backup with max wait guarantee
  */
 function scheduleBackup(store: AppStore): void {
+  isDirty = true;
+  console.info('[backup] change @', new Date().toISOString());
+  
   const now = Date.now();
   const timeSinceLastSave = now - lastSaveTime;
 
   // If max wait time has passed, force save immediately
   if (timeSinceLastSave >= MAX_WAIT_MS) {
     clearTimers();
-    performBackup(store);
+    performBackup(store, 'max-wait');
     return;
   }
 
@@ -136,7 +155,7 @@ function scheduleBackup(store: AppStore): void {
   // Set up new debounce timer
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
-    performBackup(store);
+    performBackup(store, 'debounce');
   }, DEBOUNCE_MS);
 
   // Set up max wait timer if not already set
@@ -148,7 +167,7 @@ function scheduleBackup(store: AppStore): void {
         clearTimeout(debounceTimer);
         debounceTimer = null;
       }
-      performBackup(store);
+      performBackup(store, 'max-wait');
     }, remainingMaxWait);
   }
 }
@@ -165,12 +184,18 @@ function clearTimers(): void {
     clearTimeout(maxWaitTimer);
     maxWaitTimer = null;
   }
+  if (safetyTimer) {
+    clearTimeout(safetyTimer);
+    safetyTimer = null;
+  }
 }
 
 /**
  * Perform the actual backup
  */
-function performBackup(store: AppStore): void {
+function performBackup(store: AppStore, reason: string): void {
+  if (!isDirty) return; // Skip if no changes
+  
   const workspace = store.currentWorkspaceId;
   const data = getDataSnapshot(store);
   
@@ -178,41 +203,46 @@ function performBackup(store: AppStore): void {
   clearTimers();
   
   // Fire and forget - don't await to avoid blocking
-  backupToCloud(workspace, data).catch(err => {
-    console.warn('[Backup] Backup error:', err);
+  backupToCloud(workspace, data, reason).catch(err => {
+    console.warn('[backup] backup error:', err);
   });
+  
+  // Restart safety timer
+  startSafetyTimer(store);
 }
 
 /**
- * Flush any pending backups (called on unload)
+ * Start 60s safety interval timer
  */
-function flushPendingBackup(): void {
-  if (!storeInstance) return;
-  
-  clearTimers();
-  
-  // Synchronous backup attempt (best effort)
-  const workspace = storeInstance.currentWorkspaceId;
-  const data = getDataSnapshot(storeInstance);
-  
-  // Use sendBeacon if available for unload
-  if (navigator.sendBeacon) {
-    try {
-      const blob = new Blob(
-        [JSON.stringify({ workspace, data })],
-        { type: 'application/json' }
-      );
-      // Note: This won't work without a proper endpoint, but we'll try anyway
-      console.log('[Backup] Attempting flush on unload');
-    } catch {
-      // Ignore
-    }
+function startSafetyTimer(store: AppStore): void {
+  if (safetyTimer) {
+    clearTimeout(safetyTimer);
   }
   
-  // Fallback: synchronous backup (may or may not complete)
-  backupToCloud(workspace, data).catch(() => {
-    // Ignore errors during unload
-  });
+  safetyTimer = setTimeout(() => {
+    if (isDirty && storeInstance) {
+      performBackup(storeInstance, 'safety-60s');
+    }
+  }, SAFETY_INTERVAL_MS);
+}
+
+/**
+ * Flush any pending backups (called on unload or visibility change)
+ */
+function flushPendingBackup(reason: string): void {
+  if (!storeInstance || !isDirty) return;
+  
+  clearTimers();
+  performBackup(storeInstance, reason);
+}
+
+/**
+ * Handle visibility change
+ */
+function handleVisibilityChange(): void {
+  if (document.hidden && isDirty && storeInstance) {
+    flushPendingBackup('visibility-hidden');
+  }
 }
 
 /**
@@ -220,11 +250,11 @@ function flushPendingBackup(): void {
  * 
  * - Checks if localStorage is empty and restores from cloud if needed
  * - Sets up store change listener with debounced backups
- * - Registers unload handler for flush
+ * - Registers multiple flush triggers (unload, visibility, safety interval)
  * 
  * Returns { forceBackup } for manual triggering later
  */
-export async function initBackupAdapter(store: AppStore): Promise<{ forceBackup: () => Promise<void> }> {
+export async function initBackupAdapter(store: AppStore): Promise<{ forceBackup: (reason?: string) => Promise<void> }> {
   storeInstance = store;
   
   // Step 1: Check if we need to restore from cloud
@@ -250,18 +280,23 @@ export async function initBackupAdapter(store: AppStore): Promise<{ forceBackup:
   // Check for changes every 1 second
   setInterval(checkForChanges, 1000);
   
-  // Step 3: Register unload handler
-  window.addEventListener('beforeunload', flushPendingBackup);
+  // Step 3: Register event handlers
+  window.addEventListener('beforeunload', () => flushPendingBackup('beforeunload'));
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   
-  // Return forceBackup function for manual use
+  // Step 4: Start safety timer
+  startSafetyTimer(store);
+  
+  // Return forceBackup function for manual use (e.g., route changes)
   return {
-    forceBackup: async () => {
+    forceBackup: async (reason = 'manual') => {
       if (!storeInstance) {
         console.warn('[backup] Cannot force backup - adapter not initialized');
         return;
       }
       clearTimers();
-      performBackup(storeInstance);
+      performBackup(storeInstance, reason);
+      startSafetyTimer(storeInstance);
     }
   };
 }
