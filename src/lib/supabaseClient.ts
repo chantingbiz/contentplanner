@@ -29,3 +29,23 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create and export the singleton Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// --- Supabase connectivity check ---
+async function testSupabaseConnection() {
+  try {
+    const { data, error, status } = await supabase
+      .from('backups')
+      .select('workspace, updated_at')
+      .limit(1);
+    if (error) {
+      console.warn('[Supabase Test] ❌ Error:', error.message);
+    } else {
+      console.info('[Supabase Test] ✅ Connected. Status:', status);
+      console.table(data);
+    }
+  } catch (err) {
+    console.error('[Supabase Test] ❌ Exception:', err);
+  }
+}
+testSupabaseConnection();
+// --- End test ---
+
