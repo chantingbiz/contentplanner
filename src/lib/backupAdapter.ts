@@ -89,6 +89,7 @@ async function backupToCloud(workspace: string, data: AppData, reason: string): 
     const at = new Date().toISOString();
     
     console.info('[backup] flush reason:', reason);
+    console.info('[backup] preparing upsert', { workspace: wk, bytes: JSON.stringify(data).length });
     
     const payload = {
       workspace: wk,
@@ -97,16 +98,16 @@ async function backupToCloud(workspace: string, data: AppData, reason: string): 
       updated_at: at,
     };
 
-    const { error } = await supabase
+    const { error, status } = await supabase
       .from('backups')
       .upsert(payload, {
         onConflict: 'workspace',
       });
 
     if (error) {
-      console.warn('[backup] upsert ERROR', error);
+      console.warn('[backup] ❌ upsert failed', { error, status });
     } else {
-      console.info('[backup] upsert OK', { wk, at });
+      console.info('[backup] ✅ upsert ok', { status, workspace: wk });
       isDirty = false; // Clear dirty flag on successful backup
     }
   } catch (err) {
@@ -135,6 +136,7 @@ function getDataSnapshot(store: AppStore): AppData {
  */
 function scheduleBackup(store: AppStore): void {
   isDirty = true;
+  console.info('[backup] store change detected', new Date().toISOString());
   console.info('[backup] change @', new Date().toISOString());
   
   const now = Date.now();
