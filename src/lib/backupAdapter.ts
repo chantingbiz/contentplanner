@@ -59,7 +59,7 @@ function setAutoSyncPref(wk: string, enabled: boolean): void {
   try {
     localStorage.setItem(`backup:autoSync:${wk}`, String(enabled));
   } catch (err) {
-    console.warn('[sync] Failed to save autoSync preference', err);
+    if (import.meta.env.DEV) console.warn('[sync] Failed to save autoSync preference', err);
   }
 }
 
@@ -93,19 +93,19 @@ async function restoreFromCloud(workspace: string, store: AppStore): Promise<boo
         // No row found, that's okay
         return false;
       }
-      console.warn('[backup] restore error', error.message);
+      if (import.meta.env.DEV) console.warn('[backup] restore error', error.message);
       return false;
     }
 
     if (data?.data) {
-      console.info('[backup] first-load restore', wk);
+      if (import.meta.env.DEV) console.info('[backup] first-load restore', wk);
       store.importState(data.data as Partial<AppData>);
       return true;
     }
 
     return false;
   } catch (err) {
-    console.warn('[backup] restore error', err);
+    if (import.meta.env.DEV) console.warn('[backup] restore error', err);
     return false;
   }
 }
@@ -118,7 +118,7 @@ async function backupToCloud(workspace: string, data: AppData, reason: string): 
     const wk = normalizeWorkspaceKey(workspace);
     const bytes = JSON.stringify(data).length;
     
-    console.info('[backup] debounced upsert', { wk, bytes });
+    if (import.meta.env.DEV) console.info('[backup] debounced upsert', { wk, bytes });
     
     const payload = {
       workspace: wk,
@@ -134,16 +134,16 @@ async function backupToCloud(workspace: string, data: AppData, reason: string): 
       });
 
     if (error) {
-      console.warn('[backup] ❌ upsert error', error);
+      if (import.meta.env.DEV) console.warn('[backup] ❌ upsert error', error);
     } else {
       const nowIso = new Date().toISOString();
-      console.info('[backup] ✅ upsert ok', { status });
+      if (import.meta.env.DEV) console.info('[backup] ✅ upsert ok', { status });
       isDirty = false; // Clear dirty flag on successful backup
       lastLocalSaveAt = nowIso;
       lastRemoteUpdatedAt = nowIso; // Server canonical time
     }
   } catch (err) {
-    console.warn('[backup] ❌ upsert error', err);
+    if (import.meta.env.DEV) console.warn('[backup] ❌ upsert error', err);
   }
 }
 
@@ -168,7 +168,7 @@ function getDataSnapshot(store: AppStore): AppData {
  */
 function scheduleBackup(store: AppStore): void {
   isDirty = true;
-  console.info('[backup] change', new Date().toISOString());
+  if (import.meta.env.DEV) console.info('[backup] change', new Date().toISOString());
   
   const now = Date.now();
   const timeSinceLastFlush = now - lastFlushTime;
@@ -229,7 +229,7 @@ function clearTimers(): void {
 function performBackup(store: AppStore, reason: string): void {
   if (!isDirty) return; // Skip if no changes
   
-  console.info('[backup] flush reason:', reason);
+  if (import.meta.env.DEV) console.info('[backup] flush reason:', reason);
   
   const workspace = store.currentWorkspaceId;
   const data = getDataSnapshot(store);
@@ -239,7 +239,7 @@ function performBackup(store: AppStore, reason: string): void {
   
   // Fire and forget - don't await to avoid blocking
   backupToCloud(workspace, data, reason).catch(err => {
-    console.warn('[backup] backup error:', err);
+    if (import.meta.env.DEV) console.warn('[backup] backup error:', err);
   });
   
   // Restart watchdog timer
@@ -307,28 +307,28 @@ async function pollRemoteUpdates(): Promise<void> {
     
     if (error) {
       if (error.code !== 'PGRST116') {
-        console.warn('[sync] poll error', error.message);
+        if (import.meta.env.DEV) console.warn('[sync] poll error', error.message);
       }
       return;
     }
     
     const remoteUpdatedAt = data?.updated_at;
     
-    console.info('[sync] poll tick', { remote: remoteUpdatedAt, local: lastRemoteUpdatedAt });
+    if (import.meta.env.DEV) console.info('[sync] poll tick', { remote: remoteUpdatedAt, local: lastRemoteUpdatedAt });
     
     if (remoteUpdatedAt && remoteUpdatedAt > (lastRemoteUpdatedAt || '')) {
       lastRemoteUpdatedAt = remoteUpdatedAt;
       
       if (!isDirty) {
         // Auto-pull since local is clean
-        console.info('[sync] auto-pull (remote newer)');
+        if (import.meta.env.DEV) console.info('[sync] auto-pull (remote newer)');
         await performPull(false); // skipConfirm = true for auto-pull
       } else {
-        console.info('[sync] remote newer but local is dirty — skipped');
+        if (import.meta.env.DEV) console.info('[sync] remote newer but local is dirty — skipped');
       }
     }
   } catch (err) {
-    console.warn('[sync] poll error', err);
+    if (import.meta.env.DEV) console.warn('[sync] poll error', err);
   }
 }
 
@@ -358,7 +358,7 @@ function stopPolling(): void {
  */
 async function performPull(askConfirm: boolean): Promise<void> {
   if (!storeInstance) {
-    console.warn('[sync] Cannot pull - adapter not initialized');
+    if (import.meta.env.DEV) console.warn('[sync] Cannot pull - adapter not initialized');
     return;
   }
   
@@ -370,7 +370,7 @@ async function performPull(askConfirm: boolean): Promise<void> {
       'You have unsaved local changes. Pull from cloud will overwrite them. Continue?'
     );
     if (!proceed) {
-      console.info('[sync] pullLatest cancelled by user');
+      if (import.meta.env.DEV) console.info('[sync] pullLatest cancelled by user');
       return;
     }
   }
@@ -381,7 +381,7 @@ async function performPull(askConfirm: boolean): Promise<void> {
       const safetyKey = `backup:safety:${wk}:${Date.now()}`;
       const snapshot = JSON.stringify(getDataSnapshot(storeInstance));
       sessionStorage.setItem(safetyKey, snapshot);
-      console.info('[sync] safety copy saved', safetyKey);
+      if (import.meta.env.DEV) console.info('[sync] safety copy saved', safetyKey);
     }
     
     // Fetch full row
@@ -393,10 +393,10 @@ async function performPull(askConfirm: boolean): Promise<void> {
     
     if (error) {
       if (error.code === 'PGRST116') {
-        console.info('[sync] pullLatest: no cloud backup for this workspace');
+        if (import.meta.env.DEV) console.info('[sync] pullLatest: no cloud backup for this workspace');
         return;
       }
-      console.warn('[sync] pullLatest error', error.message);
+      if (import.meta.env.DEV) console.warn('[sync] pullLatest error', error.message);
       return;
     }
     
@@ -409,10 +409,10 @@ async function performPull(askConfirm: boolean): Promise<void> {
       lastRemoteUpdatedAt = data.updated_at;
       lastStateHash = JSON.stringify(getDataSnapshot(storeInstance));
       
-      console.info('[sync] pullLatest OK', { wk, updated_at: data.updated_at });
+      if (import.meta.env.DEV) console.info('[sync] pullLatest OK', { wk, updated_at: data.updated_at });
     }
   } catch (err) {
-    console.warn('[sync] pullLatest error', err);
+    if (import.meta.env.DEV) console.warn('[sync] pullLatest error', err);
   }
 }
 
@@ -488,7 +488,7 @@ export async function initBackupAdapter(store: AppStore): Promise<{ forceBackup:
   return {
     forceBackup: async (reason = 'manual') => {
       if (!storeInstance) {
-        console.warn('[backup] Cannot force backup - adapter not initialized');
+        if (import.meta.env.DEV) console.warn('[backup] Cannot force backup - adapter not initialized');
         return;
       }
       clearTimers();
@@ -508,7 +508,7 @@ export function setAutoSync(enabled: boolean): void {
   autoSyncEnabled = enabled;
   setAutoSyncPref(wk, enabled);
   
-  console.info('[sync] autoSync set →', enabled);
+  if (import.meta.env.DEV) console.info('[sync] autoSync set →', enabled);
   
   if (enabled) {
     startPolling();

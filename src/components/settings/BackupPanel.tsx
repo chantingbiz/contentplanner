@@ -54,7 +54,7 @@ export default function BackupPanel() {
         };
         
         const bytes = JSON.stringify(snapshot).length;
-        console.info('[backup] force upsert start', { wk, bytes });
+        if (import.meta.env.DEV) console.info('[backup] force upsert start', { wk, bytes });
         
         const { error, status: httpStatus } = await supabase
           .from('backups')
@@ -69,19 +69,19 @@ export default function BackupPanel() {
           );
         
         if (error) {
-          console.warn('[backup] force upsert ERROR', error);
+          if (import.meta.env.DEV) console.warn('[backup] force upsert ERROR', error);
           setStatus('error');
           setMessage(`Error: ${error.message}`);
           setTimestamp(new Date().toLocaleTimeString());
         } else {
-          console.info('[backup] force upsert OK', { status: httpStatus });
+          if (import.meta.env.DEV) console.info('[backup] force upsert OK', { status: httpStatus });
           setStatus('success');
           setMessage(`Backup successful (${bytes.toLocaleString()} bytes)`);
           setTimestamp(new Date().toLocaleTimeString());
         }
       }
     } catch (err: any) {
-      console.warn('[backup] force upsert ERROR', err);
+      if (import.meta.env.DEV) console.warn('[backup] force upsert ERROR', err);
       setStatus('error');
       setMessage(`Exception: ${err.message || 'Unknown error'}`);
       setTimestamp(new Date().toLocaleTimeString());
